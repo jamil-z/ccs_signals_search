@@ -1,0 +1,22 @@
+[
+  {
+    "company_name": "Rippling",
+    "company_domain": "rippling.com",
+    "icp_hint": "saas"
+  },
+  {
+    "company_name": "Deel",
+    "company_domain": "deel.com",
+    "icp_hint": "saas"
+  },
+  {
+    "company_name": "Chick-fil-A",
+    "company_domain": "chick-fil-a.com",
+    "icp_hint": "restaurant"
+  },
+  {
+    "company_name": "Shake Shack",
+    "company_domain": "shakeshack.com",
+    "icp_hint": "restaurant"
+  }
+]

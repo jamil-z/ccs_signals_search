@@ -1,0 +1,500 @@
+McDonald’s USA
+Starbucks
+Subway
+Taco Bell
+Chick-fil-A
+Wendy’s
+Dunkin’
+Burger King
+Domino’s Pizza
+Chipotle
+Panera Bread
+Sonic Drive-In
+Pizza Hut
+KFC
+Popeyes
+Little Caesars
+Dairy Queen
+Arby’s
+Panda Express
+Jack in the Box
+Papa John’s
+Whataburger
+Jimmy John’s
+Hardee’s
+Carl’s Jr.
+Five Guys
+Culver’s
+Raising Cane’s
+Zaxby’s
+Wingstop
+Jersey Mike’s
+In-N-Out Burger
+Bojangles
+El Pollo Loco
+Checkers / Rally’s
+Krispy Kreme
+Qdoba
+Del Taco
+Firehouse Subs
+Moe’s Southwest
+McAlister’s Deli
+Jason’s Deli
+Shake Shack
+White Castle
+Tim Hortons (USA)
+Baskin-Robbins
+Cold Stone
+Auntie Anne’s
+Cinnabon
+Tropical Smoothie
+Smoothie King
+Dutch Bros Coffee
+Marco’s Pizza
+Papa Murphy’s
+Hungry Howie’s
+Jet’s Pizza
+Round Table
+Godfather’s Pizza
+Cici’s Pizza
+Sbarro
+Church’s Texas
+Boston Market
+Captain D’s
+Long John Silver’s
+Waffle House
+Denny’s
+IHOP
+Cracker Barrel
+Bob Evans
+Golden Corral
+Perkins
+Huddle House
+Wawa
+Sheetz
+7-Eleven (Food)
+Casey’s
+QuikTrip (QT)
+RaceTrac
+Buc-ee’s
+Cumberland Farms
+Royal Farms
+Maverik
+Sweetgreen
+CAVA
+Chopt
+Salad and Go
+Just Salad
+Freshii (USA)
+Dig (Dig Inn)
+Tender Greens
+Honeygrow
+CoreLife Eatery
+Freddy’s Frozen
+Smashburger
+The Habit Burger
+Steak ’n Shake
+Fuddruckers
+Fatburger
+Johnny Rockets
+Wayback Burgers
+BurgerFi
+Mooyah
+Wahlburgers
+Good Times
+Cook Out
+Portillo’s
+A&W Restaurants
+Krystal
+White Castle
+Farmer Boys
+Burgerville
+Braum’s
+In-N-Out
+Swensons Drive-In
+Dick’s Drive-In
+Pal’s Sudden Svc
+Zip’s Drive-In
+Halo Burger
+Kewpee
+Lion’s Choice
+Back Yard Burgers
+Milo’s Hamburgers
+Schoop’s
+Dave’s Hot Chicken
+Slim Chickens
+Golden Chick
+Bush’s Chicken
+Chicken Express
+Lee’s Famous
+Guthrie’s
+Chester’s
+Pollo Tropical
+Pollo Campero (US)
+Bonchon (US)
+Jollibee (US)
+Hattie B’s
+Gus’s Fried Chicken
+Harold’s Chicken
+Prince’s Hot
+Huey Magoo’s
+Blaze Pizza
+MOD Pizza
+Pieology
+California Pizza
+Donatos Pizza
+Mellow Mushroom
+Mountain Mike’s
+Toppers Pizza
+Fazoli’s
+Villa Italian
+Uno Pizzeria
+Giordano’s
+Lou Malnati’s
+Ledo Pizza
+Rosati’s Pizza
+Fox’s Pizza Den
+Aurelio’s Pizza
+Bertucci’s
+Old Chicago
+Pie Five
+Schlotzsky’s
+Potbelly
+Einstein Bros
+Au Bon Pain
+Charley’s Philly
+Penn Station
+Which Wich
+Togo’s
+Blimpie
+D’Angelo
+Capriotti’s
+Earl of Sandwich
+Mendocino Farms
+Cousins Subs
+PrimoHoagies
+Great Harvest
+Le Pain Quotidien
+Newk’s Eatery
+Corner Bakery
+Groucho’s Deli
+Ike’s Love
+DiBella’s Subs
+Erik’s DeliCafe
+Quiznos
+Pret A Manger (US)
+Pick Up Stix
+L&L Hawaiian
+Sarku Japan
+Manchu Wok (US)
+Bibibop
+WaBa Grill
+Yoshinoya (US)
+Teriyaki Madness
+Noodles & Co
+HuHot Mongolian
+Genghis Grill
+BD’s Mongolian
+Flat Top Grill
+Pei Wei
+P.F. Chang's (ToGo)
+Hawkers Asian
+Jinya Ramen
+Taco Cabana
+Taco John’s
+Baja Fresh
+Rubio’s Coastal
+Torchy’s Tacos
+Fuzzy’s Taco
+Taco Bueno
+Chronic Tacos
+Wahoo’s Fish
+Taco Time
+On The Border
+Chuy’s
+Cafe Rio
+Dos Bros
+Zambrero (US)
+Bubbakoo’s
+Tijuana Flats
+Costa Vida
+Peet’s Coffee
+Caribou Coffee
+Coffee Bean (CBTL)
+Biggby Coffee
+PJ’s Coffee
+Scooter’s Coffee
+Human Bean
+Ziggi’s Coffee
+Philz Coffee
+Blue Bottle
+Stumptown
+Intelligentsia
+Gregorys Coffee
+Bluestone Lane
+Dunn Brothers
+Shipley Do-Nuts
+Voodoo Doughnut
+Duck Donuts
+Winchell’s
+Honey Dew Donuts
+LaMar’s Donuts
+Wetzel’s Pretzels
+Mrs. Fields
+Great American
+Insomnia Cookies
+Crumbl Cookies
+Ben & Jerry’s
+Häagen-Dazs
+Rita’s Italian Ice
+Menchie’s
+Pinkberry
+Red Mango
+Yogurtland
+Orange Leaf
+Planet Smoothie
+Marble Slab
+MaggieMoo’s
+Bruster’s Ice Cream
+Carvel
+Dippin’ Dots
+TCBY
+Sweet Frog
+Andy’s Frozen
+Jeremiah’s Ice
+Bahama Buck’s
+Kung Fu Tea
+Vivi Bubble Tea
+Ten Ren’s Tea
+Tapioca Express
+Lollicup
+It’s Boba Time
+Boba Guys
+Argo Tea
+DavidsTea
+Teavana
+Joe Coffee
+Saxbys
+Robeks
+Juice It Up!
+Nekter Juice Bar
+Clean Juice
+Tiff’s Treats
+Cookies by Design
+Nestle Toll House
+Beard Papa’s (US)
+Paris Baguette (US)
+Tous Les Jours (US)
+85°C Bakery (US)
+Lady M
+Dominique Ansel
+Magnolia Bakery
+Sprinkles
+Georgetown Cupcake
+Gigi’s Cupcakes
+Smallcakes
+Nothing Bundt
+16 Handles
+Yogen Früz
+Ralph’s Ices
+Honey Baked Ham
+Fresh & Co
+Crisp & Green
+Sizzler
+Luby’s
+Shoney’s
+Friendly’s
+Big Boy
+Skyline Chili
+Gold Star Chili
+Taco Tico
+Blake’s Lotaburger
+Runza
+Biscuitville
+Tudor’s Biscuit
+Jack’s
+Hot Dog on Stick
+James Coney Island
+Dat Dog
+Hawaiian Bros
+Wildflower Bread
+QuickChek
+Royal Castle
+Hunt Brothers
+L&L Hawaiian
+Mr. Beast Burger
+Hero Certified
+Triple O’s (US Locs)
+Harvey’s (US Locs)
+Swiss Chalet (US)
+St-Hubert (US)
+Mary Brown’s (US)
+Amorino (US)
+Grom (US)
+Swensen’s (US)
+First Watch
+Snooze A.M.
+Broken Yolk Cafe
+Egg & I
+Black Bear Diner
+Metro Diner
+Village Inn
+Bakers Square
+Famous Dave's
+Dickey's BBQ
+Mission BBQ
+4 Rivers Smokehouse
+City Barbeque
+Sonny's BBQ
+Red Hot & Blue
+Shane's Rib Shack
+Lucille's Smokehouse
+Smokey Bones
+Bubba's 33
+Texas Roadhouse
+Outback Steakhouse
+Carrabba's
+Bonefish Grill
+Fleming's
+Olive Garden
+LongHorn
+Cheddar's
+Yard House
+The Capital Grille
+Seasons 52
+Bahama Breeze
+Eddie V's
+Chili's
+Maggiano's
+It's Just Wings
+Applebee's
+Red Lobster
+TGI Fridays
+Ruby Tuesday
+O'Charley's
+Ninety Nine
+Logan's Roadhouse
+Twin Peaks
+Buffalo Wild Wings
+Hooters
+Walk-On's
+Beef 'O' Brady's
+Hurricane Grill
+Native Grill & Wings
+Tilted Kilt
+Miller's Ale House
+BJ's Brewhouse
+Cheesecake Factory
+Grand Lux Cafe
+North Italia
+Flower Child
+P.F. Chang's
+Benihana
+RA Sushi
+Kona Grill
+STK Steakhouse
+Morton's
+Del Frisco's
+Bubba Gump
+Rainforest Cafe
+Saltgrass Steak
+Joe's Crab Shack
+McCormick & Schmick
+Claim Jumper
+Black Angus
+Sizzler
+Ponderosa
+Bonanza
+Ryan's
+Old Country Buffet
+Souplantation
+Sweet Tomatoes
+Cousins Subs
+Erbert & Gerbert's
+Tubby's
+Mr. Hero
+Jerry's Subs
+Beyond Juicery
+Main Squeeze
+Pressed Juicery
+Vitality Bowls
+Rush Bowls
+Grain & Berry
+Playa Bowls
+Frutta Bowls
+Garbanzo Mediterranean Fresh
+The Simple Greek
+Barberitos
+Zoup!
+Naf Naf Grill
+Roti Modern Mediterranean
+Luna Grill
+Taziki's
+Zoës Kitchen
+Daphne's
+Great Greek
+Nick the Greek
+Spitz
+Verts
+Halal Guys
+Shah's Halal
+Naz's Halal
+Mamoun's
+Curry Up Now
+Rasa
+Indikitch
+Choolaah
+Biju's Little Curry
+Seoul Taco
+Korilla BBQ
+Cupbop
+Pokéworks
+Poke Bros
+Aloha Poke
+Sweetfin
+Poké Bar
+Lemonade
+Modern Market
+Urban Plates
+Flower Child
+True Food Kitchen
+Tocaya Organica
+Veggie Grill by Next Level
+Native Foods
+HipCityVeg
+Slutty Vegan
+Project Juice
+Earthbar
+SunLife Organics
+Kreation Organic
+Moon Juice
+Pita Pit (US)
+Pita Jungle
+Extreme Pita
+Rolbertos
+Filibertos
+Federicos
+Juliobertos
+Alibertos
+Los Betos
+Rancheros
+Amigos/Kings
+Taco Casa
+Taco Villa
+Taco Mayo
+Taco Tico
+Mighty Taco
+Jimboys Tacos
+Baker's Drive-Thru
+Miguel's Jr.
+King Taco
+Tacos El Gavilan
+Tacos 1986
+Guerrilla Tacos
+Trejo's Tacos
+Salazar
+Petite Taqueria
+Gracias Madre
+Cafe Gratitude
+Sage Vegan
+Crossroads Kitchen
