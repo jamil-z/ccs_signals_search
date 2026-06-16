@@ -144,31 +144,48 @@ async def run_all(
 def print_summary(results: list[AgentState]):
     table = Table(title="🎯 ICP Search Results", show_lines=True)
     table.add_column("Company", style="bold cyan", no_wrap=True)
-    table.add_column("Size", style="yellow")
-    table.add_column("Industry")
-    table.add_column("Funding", style="green")
-    table.add_column("Signals", style="magenta")
-    table.add_column("Jobs", justify="center")
+    table.add_column("ICP Score", justify="center", style="yellow")
     table.add_column("Action", style="bold")
+    table.add_column("Creative Roles", justify="center", style="green")
+    table.add_column("Tech Stack", style="magenta")
+    table.add_column("MI Signals", justify="center", style="cyan")
 
     for state in results:
         p = state.profile
-        signals = ", ".join(s.value for s in p.growth_signals) or "—"
-        # Extract recommended_action from synthesis log if available
-        action = "—"
-        for log in reversed(state.search_logs):
-            if log.phase == "4.0_synthesis":
-                action = log.extracted_data.get("recommended_action", "—")
-                break
+        sigs = p.automotive_signals
+        
+        # ICP Score
+        icp_score_str = str(p.icp_score) if p.icp_score > 0 else "—"
+        
+        # Action
+        action = p.recommended_action or "—"
+        
+        # Creative Roles (from Signal 5 / Phase 4.3)
+        if sigs.is_hiring_creative_roles:
+            roles_cnt = len(sigs.creative_job_titles)
+            roles_str = f"Yes ({roles_cnt})" if roles_cnt > 0 else "Yes"
+        else:
+            roles_str = "No"
+
+        # Tech Stack (truncate to first 2-3 tools)
+        tools = sigs.detected_creative_tools
+        if tools:
+            tech_str = ", ".join(tools[:3])
+            if len(tools) > 3:
+                tech_str += "..."
+        else:
+            tech_str = "—"
+
+        # MI Signals
+        mi_str = "Yes" if sigs.has_michigan_local_involvement else "No"
 
         table.add_row(
             p.company_name,
-            p.company_size.value,
-            p.industry or "—",
-            p.funding_stage.value,
-            signals,
-            str(len(p.active_job_postings)),
+            icp_score_str,
             action,
+            roles_str,
+            tech_str,
+            mi_str,
         )
 
     console.print(table)

@@ -1,24 +1,31 @@
-# 🎯 ICP Search Engine & Lead Enrichment Pipeline
+# 🎯 Lead Enrichment & Signal Extraction Pipeline (Automotive Design Michigan ICP)
 
-A **generic, company-agnostic** intelligence engine that takes any company name and automatically processes it through a stateful research pipeline. It produces a structured Ideal Customer Profile (ICP) assessment — evaluating corporate identity, financial scale, and real-time growth signals.
+This commercial intelligence engine is hyper-targeted to identify, evaluate, and qualify companies involved in **automotive design, transportation design, concept engineering, prototyping, and mobility innovation in Michigan** (specifically the Detroit metro area).
 
-Built using **LangGraph + Azure OpenAI** with a pluggable search backend (Serper API or Playwright), this pipeline is designed to automate B2B target research at scale, replacing hours of manual googling with seconds of structured agentic execution.
+Built using **LangGraph + Azure OpenAI** with a pluggable search backend (Serper API or Playwright), this pipeline automates B2B target research at scale, evaluating target profiles against **8 key design signals** to assign an Ideal Customer Profile (ICP) fit score (1–10) and recommend personalized outbound actions.
 
 ---
 
 ## 🚀 Quick Start
 
 ```bash
-# 1. Install dependencies
+# 1. Activate your virtual environment and install dependencies
+source .venv/bin/activate
 pip install -r requirements.txt
 
-# 2. Configure environment
-cp .env.example .env
-# → Fill in AZURE_OPENAI_API_KEY, AZURE_OPENAI_ENDPOINT
-# → Add SERPER_API_KEY (free at https://serper.dev — 2,500 searches/month)
+# 2. Configure environment variables (.env)
+# Copy .env.example to .env and define:
+# - AZURE_OPENAI_API_KEY & AZURE_OPENAI_ENDPOINT
+# - SERPER_API_KEY (for Google search queries)
+# - MAX_CONCURRENT_COMPANIES (concurrency control, e.g., 2 or 5)
 
-# 3. Add your target companies
-nano companies.txt   # Add one company name per line
+# 3. Define target companies
+# Update the 'companies.txt' file, adding one company name per line.
+# Example:
+# Ford Motor Company
+# Sundberg-Ferar
+# Prefix Corporation
+# The Shyft Group
 
 # 4. Run the pipeline
 python main.py
@@ -26,157 +33,143 @@ python main.py
 
 ---
 
-## 🏗️ How it Works & Core Flow
+## 🏗️ Stateful Graph Topology (5 Phases)
 
-Rather than using basic, flat web scraping, the engine utilizes a stateful graph powered by **LangGraph**. Every company is processed independently through a structured pipeline of nodes, making decisions based on previously gathered context to ensure extreme accuracy.
+Instead of using flat, linear scraping, the engine utilizes a stateful graph powered by **LangGraph**. Each company is processed through five distinct research phases:
 
 ```
-INPUT: Company Name(s) (with auto-deduplication)
+INPUT: Company Name(s) (with automatic CLI deduplication)
        ↓
  ┌─────────────────────────────────────────────────────────────┐
  │                     LangGraph Pipeline                      │
  │                                                             │
- │  Step 1: Identity & Digital Presence                         │
- │  • Resolves website and LinkedIn URLs                       │
- │  • Captures core industry sector and description            │
+ │  Phase 1: Identity & Digital Presence                       │
+ │  • Resolves official domain and LinkedIn URLs               │
+ │  • Captures industry sector and description                 │
  │                             ↓                               │
- │  Step 2: Scale & Financial Health                           │
- │  • Detects tickers, market cap, and funding stages          │
- │  • Estimates customer volumes & corporate scale             │
+ │  Phase 2: Scale & Financial Health                          │
+ │  • Aggressive public market check (Tickers, Market Cap)     │
+ │  • Identifies funding stages and revenue metrics            │
  │                             ↓                               │
- │  Step 3: Growth & Intention Signals                         │
- │  • Scans 10+ ATS platforms (Workday, Taleo, etc.)           │
- │  • Extracts expansion news and hiring milestones            │
+ │  Phase 3: Hiring & General Growth Signals                   │
+ │  • Scans 10+ ATS platforms (Greenhouse, Workday, etc.)      │
+ │  • Extracts expansion news and general growth indicators    │
  │                             ↓                               │
- │  Step 4: AI Synthesis & ICP Assessment                      │
- │  • Computes fit score (1-10) and next action                │
- │  • Formulates a concise 3-5 sentence brief                  │
+ │  Phase 4: Automotive Design Signals (8 New Signals)         │
+ │  • Extracts 8 hyper-specific design signals & evidence      │
+ │                             ↓                               │
+ │  Phase 5: Strategic Synthesis (Design Strategist LLM)       │
+ │  • Computes ICP score (1-10) and outreach action            │
+ │  • Formulates a concise strategic target assessment         │
  └─────────────────────────────────────────────────────────────┘
        ↓                                 ↓
-  [Google Search / HTTP]            [Azure OpenAI]
-  - Serper API (Prod)               - Structure normalization
-  - Playwright (Fallback)           - Disambiguation filtering
+ [Serper / Playwright]            [Azure OpenAI]
+ - Agnostic search layer          - Pydantic-based extraction
+ - Asynchronous timeouts          - Disambiguation filtering
        ↓
-OUTPUTS:
- ├── 📊 Summary CSV (Clean, N/A-formatted CRM-ready table)
- └── 📄 Detailed CSV (Full raw HTML & prompt audit log)
+OUTPUTS (outputs/ directory):
+ ├── 📊 Summary CSV (Detailed 8-signal schema, CRM-ready)
+ └── 📄 Detailed CSV (Raw HTML snippets & query execution log)
 ```
 
 ---
 
-## 📋 Detailed Pipeline Phases
+## 🔍 The 8 Target Design Signals (Phase 4)
 
-### Phase 1 — Identity & Digital Presence
-This phase anchors the company's real digital footprint to prevent downstream search collisions.
-* **Step 1.1 (Official URL):** Search query `"{company} official website"`. Resolves the exact homepage URL.
-* **Step 1.2 (LinkedIn Profile):** Search query `site:linkedin.com/company "{company}"`. Extracts official description, industry category, and employee count.
+The pipeline searches, extracts, and logs evidence for the following signals:
 
-### Phase 2 — Scale & Financial Health
-Determines the size, funding class, and budget of the organization.
-* **Step 2.1 (Public Markets):** Search query `"{company}" (ticker OR "market cap" OR site:finance.yahoo.com OR site:marketwatch.com)`. Extracts ticker symbol, exchange, and market capitalization.
-* **Step 2.2 (Capital & Revenue):** Search query `"{company}" (crunchbase OR "funding round" OR "series A" OR "annual revenue" OR "Q3 results" OR "earnings report" OR "raised")`. Captures funding stages and revenue performance.
-* **Step 2.3 (Customer Footprint):** Search query `site:{domain} ("trusted by" OR "customers" OR "teams relying on" OR "clients" OR "case studies" OR "success stories" OR "investor relations" OR "annual report")`. Estimates team scale and client count.
-
-### Phase 3 — Hiring & Growth Signals
-Detects active expansion milestones indicating high outbound conversion potential.
-* **Step 3.1 (ATS Telemetry):** Search query scanning `greenhouse.io`, `boards.greenhouse.io`, `jobs.lever.co`, `*.myworkdayjobs.com`, `jobs.taleo.net`, `icims.com`, `careers.smartrecruiters.com`, `successfactors.com`, `wellfound.com`, and `ashbyhq.com` for active hiring.
-* **Step 3.2 (Expansion News):** Search query `"{company}" (expansion OR "new office" OR "new market" OR "new headquarters" OR hiring OR "growing team" OR series OR acqui) after:2024-01-01`.
-
-### Phase 4 — Synthesis
-Our senior analyst prompt evaluates all collected scale and signal metrics to assign an ICP fit score (1–10), recommend a next step (`reach_out`, `monitor`, `skip`, or `research_more`), and generate a target-specific assessment brief.
+1. **Internal Creative Team (Signal 1):** Does the company have an internal creative/design team or studio in Michigan? (e.g., GM Design Center in Warren).
+2. **Creative Support Need (Signal 2):** Do they require external creative support, design consultancies, or CMF specialists?
+3. **Creative Tech Stack (Signal 3):** Core software tools used. Targeted keywords: *Adobe, Autodesk Alias, Autodesk VRED, CATIA, SolidWorks, Unity, Unreal Engine, ZBrush, Rhino*.
+4. **Enterprise Software Budget (Signal 4):** Indicators of software license purchase capability (e.g., job postings requiring enterprise tool administration).
+5. **Hiring Creative Roles (Signal 5):** Active job postings for roles like transportation designers, CMF designers, Alias modelers, or 3D visualization artists.
+6. **Upskilling Programs (Signal 6):** Technical development programs, workforce training, or community college partnerships.
+7. **Creative Leadership (Signal 7):** Executive or leadership roles in design (e.g., *Chief Design Officer*, *VP of Design*, *Creative Director*).
+8. **Local Michigan Involvement (Signal 8):** Recipient of MEDC grants, partner in regional workforce alliances, or member of Michigan associations.
 
 ---
 
-## ⚡ Enterprise Resilience & Advanced Reasoning
+## 📊 CSV Report Schemas
 
-Built to run reliably under real-world data constraints:
+Two CSV files are generated under `./outputs/` per execution:
 
-### 🛡️ Infinite-Hang Prevention & Error Recovery
-* **Dual-Layer Timeouts:** Individual search requests are capped at 15 seconds. The entire search execution layer is wrapped in a hard `asyncio.wait_for` timeout of 30 seconds to bypass unresponsive search endpoints.
-* **Resilient Nodes:** Every LangGraph node runs inside isolated try-except blocks. If a step fails, it prints/logs the error, initializes defaults (like `is_public: false` or empty datasets), and continues the pipeline instead of terminating the process.
-* **Azure Content Filter Bypass:** The pipeline explicitly intercepts `openai.BadRequestError` exceptions. If Azure's content filter flags raw search HTML, it logs a warning and skips that step, continuing without losing the run.
+### 1. Account Summary Table (`company_summary_YYYYMMDD_HHMM.csv`)
+An CRM-ready table (empty cells default to `"N/A"` or `"No"`).
 
-### 🧠 Entity Disambiguation & Smart Reasoning
-* **Name-Collision Filtering:** Prevents the agent from pulling news for unrelated local businesses sharing a brand name (e.g., retrieving a local gym's news instead of Asana the software). The sector and official URL discovered in Phase 1 are cross-referenced in all subsequent prompts.
-* **Ticker Cross-Referencing:** Discards mismatching tickers (e.g., discarding a Japanese Tokyo Stock Exchange ticker when evaluating a US software company of the same name).
-* **Corporate Hierarchy Support:** Captures hiring signals even if listed under a subsidiary, franchise, or parent entity (e.g., counting "Marriott Vacations Worldwide" jobs towards Marriott International).
-* **ABS-Based Scale Inference:** In the absence of direct employee counts, the synthesis engine infers scale from funding/cap values (e.g., funding >$100M or market cap >$1B automatically elevates the class to at least `mid_market` or `enterprise`).
+| Column Group | CSV Field | Type | Description |
+|---|---|---|---|
+| **Identity** | `company_name` | String | Name of the researched company |
+| | `official_url` | String / `N/A` | Home page URL |
+| | `linkedin_url` | String / `N/A` | Official LinkedIn company profile URL |
+| | `industry` | String / `N/A` | Sector category (e.g., *Motor Vehicle Manufacturing*) |
+| | `description` | String / `N/A` | Brief company overview (max 200 chars) |
+| **Scale & Finance** | `company_size` | Enum / `unknown` | `startup` \| `smb` \| `mid_market` \| `enterprise` |
+| | `employee_count_estimate` | String / `N/A` | Employee size range from LinkedIn |
+| | `funding_stage` | Enum / `unknown` | `public` \| `seed` \| `series_a` \| `bootstrapped` \| `unknown` |
+| | `total_funding` | String / `N/A` | Total capital raised |
+| | `stock_ticker` | String / `Private` | Public trading ticker (e.g., `SHYF`) |
+| | `market_cap` | String / `Private` | Market capitalization |
+| | `customer_count_estimate` | String / `N/A` | Estimated client/user footprint |
+| **General Growth** | `growth_signals` | Pipe-separated | Core growth events (e.g., `expanding \| hiring`) |
+| | `active_job_count` | Integer | Total open job postings detected |
+| | `active_job_titles` | Pipe-separated | Titles of open positions (up to 20) |
+| | `expansion_news` | Pipe-separated | Headlines of recent expansion news (up to 5) |
+| **8 Design Signals** | `sig1_has_internal_creative_team` | `Yes` / `No` | Signal 1: Has an internal design studio? |
+| | `sig1_internal_creative_team_evidence` | String / `N/A` | Evidence details for Signal 1 |
+| | `sig2_requires_creative_support` | `Yes` / `No` | Signal 2: Requires design consulting/outsourcing? |
+| | `sig2_creative_support_evidence` | String / `N/A` | Evidence details for Signal 2 |
+| | `sig3_detected_creative_tools` | Pipe-separated | Signal 3: Detected tools (e.g. `Autodesk Alias \| CATIA`) |
+| | `sig3_tech_stack_evidence` | String / `N/A` | Evidence details for Signal 3 |
+| | `sig4_has_enterprise_software_budget` | `Yes` / `No` | Signal 4: Enterprise software purchase indicators? |
+| | `sig4_budget_evidence` | String / `N/A` | Evidence details for Signal 4 |
+| | `sig5_is_hiring_creative_roles` | `Yes` / `No` | Signal 5: Actively recruiting creative designers? |
+| | `sig5_creative_job_titles` | Pipe-separated | Job titles for open creative positions |
+| | `sig5_hiring_evidence` | String / `N/A` | Evidence details for Signal 5 |
+| | `sig6_offers_upskilling` | `Yes` / `No` | Signal 6: Upskilling or professional training? |
+| | `sig6_upskilling_programs` | Pipe-separated | Names of professional training programs |
+| | `sig6_upskilling_evidence` | String / `N/A` | Evidence details for Signal 6 |
+| | `sig7_has_creative_leadership` | `Yes` / `No` | Signal 7: Executive design leadership present? |
+| | `sig7_creative_leadership_titles` | Pipe-separated | Leadership roles found (e.g. `VP of Design`) |
+| | `sig7_leadership_evidence` | String / `N/A` | Evidence details for Signal 7 |
+| | `sig8_has_michigan_local_involvement` | `Yes` / `No` | Signal 8: Michigan local grants/MEDC/alliances? |
+| | `sig8_michigan_involvement_details` | Pipe-separated | Local involvement milestones and partners |
+| | `sig8_michigan_involvement_evidence` | String / `N/A` | Evidence details for Signal 8 |
+| **Synthesis** | `icp_score` | Integer `1-10` | Qualified fitness score |
+| | `recommended_action` | Enum | `reach_out` \| `monitor` \| `skip` \| `research_more` |
+| | `key_buying_signals` | Pipe-separated | Buying triggers detected |
+| | `analyst_summary` | String / `N/A` | Qualitative brief from Design Strategist LLM |
+| **Metadata** | `processing_errors` | Pipe-separated | List of processing errors (defaults to `None`) |
+| | `detail_log_ref` | String | Filename of detailed search log for auditing |
+| | `processed_at` | Timestamp | ISO UTC completion time |
 
----
-
-## 📁 Output Files
-
-Two CSVs are written to `./outputs/` per execution:
-
-### 1. `company_summary_YYYYMMDD_HHMM.csv`
-The final deliverable, optimized for direct import into CRM systems (HubSpot, Salesforce).
-* **No Blank Cells:** All missing optional values default to `"N/A"`.
-* **Private Company Sentinel:** Empty ticker and market cap values are automatically written as `"Private"` to prevent confusing layout spaces.
-
-| Column | Description |
-|--------|-------------|
-| `company_name` | Company name |
-| `official_url` | Official website (defaults to `"N/A"`) |
-| `linkedin_url` | LinkedIn company page URL (defaults to `"N/A"`) |
-| `industry` | LinkedIn industry sector (defaults to `"N/A"`) |
-| `description` | Corporate bio description (defaults to `"N/A"`) |
-| `company_size` | `startup` / `smb` / `mid_market` / `enterprise` |
-| `funding_stage` | `seed` / `series_a` / `public` / etc. |
-| `total_funding` | Total raised capital (defaults to `"N/A"`) |
-| `stock_ticker` | Ticker symbol (defaults to `"Private"`) |
-| `market_cap` | Market capitalization (defaults to `"Private"`) |
-| `customer_count_estimate` | Estimated client/team scale (defaults to `"N/A"`) |
-| `growth_signals` | Pipe-separated signals (e.g. `hiring, expanding` or `"N/A"`) |
-| `active_job_count` | Number of open roles found |
-| `active_job_titles` | Pipe-separated list of top 20 active job listings (defaults to `"N/A"`) |
-| `expansion_news` | Pipe-separated list of top 5 expansion headlines (defaults to `"N/A"`) |
-| `analyst_summary` | LLM-generated ICP assessment (defaults to `"N/A"`) |
-| `processing_errors` | Any errors encountered during the run (defaults to `"None"`) |
-| `detail_log_ref` | Filename of the detailed search log for auditing |
-| `processed_at` | UTC ISO timestamp |
-
-### 2. `detailed_search_log_YYYYMMDD_HHMM.csv`
-A full audit log recording every search step. Ideal for debugging queries or evaluating LLM extraction accuracy.
-
-| Column | Description |
-|--------|-------------|
-| `company_name` | Company being researched |
-| `phase` | e.g. `1.1_official_url`, `3.1_job_postings` |
-| `query_or_url` | Exact search query or URL used |
-| `backend_used` | `serper` or `playwright` |
-| `success` | Whether the search succeeded |
-| `error_message` | Error details if the step failed |
-| `extracted_data_json` | JSON string of what the LLM extracted |
-| `raw_html_snippet` | First 800 chars of page HTML / result text |
-| `timestamp` | UTC ISO timestamp |
+### 2. Search Execution Log (`detailed_search_log_YYYYMMDD_HHMM.csv`)
+An audit trail detailing the query strings executed, APIs called (Serper or Playwright), response status, and first 800 characters of the raw search result HTML snippets for full reproducibility.
 
 ---
 
-## 🔧 CLI Options
+## 🔧 Command Line Options
 
 ```bash
-python main.py                              # Processes companies.txt
-python main.py --company "Moodbit"          # Research a single company
-python main.py --companies "Salesforce,A"   # Research a comma-separated list
-python main.py --file Custom_leads.txt      # Specify custom input path
-python main.py --backend playwright         # Force headless browser search
-python main.py --max-concurrent 3           # Adjust execution speed/parallelism
+# Analyze all targets in companies.txt
+python main.py
+
+# Process a single target company
+python main.py --company "Prefix Corporation"
+
+# Process multiple comma-separated companies
+python main.py --companies "Sundberg-Ferar,Middlecott,Italdesign USA"
+
+# Override search backend to Playwright
+python main.py --backend playwright
+
+# Set max parallel executions
+python main.py --max-concurrent 4
 ```
 
 ---
 
-## 🗂️ File Structure
+## 🛡️ Enterprise Engineering & Disambiguation
 
-```
-emails_icp/
-├── main.py               # CLI parser, deduplicator & orchestrator
-├── graph.py              # LangGraph pipeline definition
-├── pipeline_phases.py    # Logic, queries, & LLM prompts for Phase 1-4
-├── search_tools.py       # Pluggable buscar() search abstraction
-├── csv_writer.py         # CSV serialization with clean N/A / Private formatting
-├── schemas.py            # Pydantic models enforcing structural typing
-├── config.py             # Configuration validation and environment loader
-├── companies.txt         # Input company names list
-├── requirements.txt      # Python dependencies
-└── outputs/              # Destination folder for generated reports
-```
+* **Ticker Extraction**: Custom Prompt instructions enforce aggressive extraction of tickers (such as `SHYF`) and market caps from conversational text snippets.
+* **Content Filter Interception**: Catches `openai.BadRequestError` exceptions triggered by raw search HTML snippets, replacing them with safe defaults to prevent graph interruption.
+* **Target Isolation**: Evaluates discovered industries (e.g. *Motor Vehicle Manufacturing*) and URLs to filter out generic businesses sharing target names.

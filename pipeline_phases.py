@@ -1,15 +1,12 @@
 """
-pipeline_phases.py — The three research phases of the ICP pipeline.
-
-Each phase is an async function that:
-  1. Builds the exact query from the technical plan
-  2. Calls buscar() (backend-agnostic)
-  3. Asks the LLM to extract structured data from the raw results
-  4. Returns updated AgentState with logs + extracted data
+pipeline_phases.py - Research phases for the Automotive & Transportation Design ICP pipeline.
+Target niche: Automotive and Transportation Design Companies in Michigan.
 
 PHASE 1: Identity & Digital Presence
 PHASE 2: Scale & Financial Health
 PHASE 3: Hiring & Expansion Signals
+PHASE 4: Automotive Design Signals (8 new ICP signals)
+PHASE 5: LLM Synthesis (Creative Services & Transportation Design Strategist)
 """
 
 from __future__ import annotations
@@ -30,6 +27,7 @@ from config import (
 )
 from schemas import (
     AgentState,
+    AutomotiveDesignSignals,
     CompanySize,
     FundingStage,
     GrowthSignal,
@@ -39,6 +37,19 @@ from search_tools import SearchResult, buscar
 
 logger = logging.getLogger(__name__)
 
+from pydantic import BaseModel, Field
+
+class PublicMarketExtraction(BaseModel):
+    is_public: bool = False
+    ticker: str | None = None
+    exchange: str | None = None
+    market_cap: str | None = None
+
+class JobPostingsExtraction(BaseModel):
+    has_openings: bool = False
+    active_job_count: int = 0
+    job_titles: list[str] = Field(default_factory=list)
+    departments: list[str] = Field(default_factory=list)
 
 # ── LLM instance (shared across phases) ──────────────────────────────────────
 
@@ -49,8 +60,8 @@ def _get_llm() -> AzureChatOpenAI:
         azure_endpoint=AZURE_OPENAI_ENDPOINT,
         deployment_name=AZURE_OPENAI_DEPLOYMENT,
         # temperature is not supported by this model (gpt-5.5 / o1-class)
-        request_timeout=30,  # hard cap on a single LLM API call
-        max_retries=2,        # retry transient network errors automatically
+        request_timeout=30,
+        max_retries=2,
     )
 
 
@@ -64,8 +75,8 @@ async def _extract(
 ) -> dict:
     """
     Ask the LLM to extract structured data from search results.
-    Always returns a dict even on parse/timeout failure — the pipeline
-    must never crash due to a single LLM call going sideways.
+    Always returns a dict even on parse/timeout failure so the pipeline
+    never crashes due to a single LLM call going sideways.
     """
     try:
         response = await llm.ainvoke([
@@ -73,18 +84,16 @@ async def _extract(
             HumanMessage(content=user_content),
         ])
         text = response.content.strip()
-        # Strip markdown code fences if the model wraps the JSON in them.
         if "```" in text:
             text = text.split("```")[1]
             if text.startswith("json"):
                 text = text[4:]
         return json.loads(text)
     except openai.BadRequestError as exc:
-        # Azure Content Filter (HTTP 400 / content_filter or jailbreak codes).
-        # Raw HTML snippets from search results occasionally trigger false positives.
-        # Log and return an empty dict so the pipeline can continue gracefully.
+        # Azure Content Filter (HTTP 400). Raw HTML snippets from search results
+        # occasionally trigger false positives. Log and return empty dict.
         logger.warning(
-            f"Azure Content Filter triggered for key='{output_key}' — skipping extraction. "
+            f"Azure Content Filter triggered for key='{output_key}' — skipping. "
             f"Error: {exc}"
         )
         return {}
@@ -118,6 +127,7 @@ def _log_step(
     return state
 
 
+
 # ─────────────────────────────────────────────────────────────────────────────
 # PHASE 1: Identity & Digital Presence
 # ─────────────────────────────────────────────────────────────────────────────
@@ -146,9 +156,7 @@ async def phase1_identity(state: AgentState) -> AgentState:
                 "Exclude LinkedIn, Crunchbase, social media, and news sites. "
                 "If unsure, return the most likely candidate."
             ),
-            user_content=(
-                f"Company: {name}\n\nSearch results:\n{result_11.text_summary}"
-            ),
+            user_content=(f"Company: {name}\n\nSearch results:\n{result_11.text_summary}"),
             output_key="official_url",
         )
         state.profile.official_url = extracted_11.get("official_url", "")
@@ -171,12 +179,10 @@ async def phase1_identity(state: AgentState) -> AgentState:
                 "Return ONLY valid JSON:\n"
                 '{"linkedin_url": "...", "industry": "...", "description": "...", "employee_count_estimate": "..."}\n'
                 "Keep description under 200 chars. Industry should be the official LinkedIn sector "
-                "(e.g. 'Software Development', 'Retail', 'Healthcare').\n"
-                "For employee_count_estimate, extract the size range if mentioned (e.g. '11-50 employees', '51-200 employees')."
+                "(e.g. 'Automotive', 'Industrial Design', 'Transportation/Trucking/Railroad').\n"
+                "For employee_count_estimate, extract the size range if mentioned (e.g. '11-50 employees')."
             ),
-            user_content=(
-                f"Company: {name}\n\nSearch results:\n{result_12.text_summary}"
-            ),
+            user_content=(f"Company: {name}\n\nSearch results:\n{result_12.text_summary}"),
             output_key="linkedin",
         )
         state.profile.linkedin_url = extracted_12.get("linkedin_url", "")
@@ -184,7 +190,6 @@ async def phase1_identity(state: AgentState) -> AgentState:
         state.profile.description = extracted_12.get("description", "")
         state.profile.employee_count_estimate = extracted_12.get("employee_count_estimate", "")
 
-        # Map employee count to company size
         emp_est = state.profile.employee_count_estimate.lower()
         if emp_est:
             if any(x in emp_est for x in ["1-10", "11-50", "2-10", "1-9", "1-4"]):
@@ -196,7 +201,7 @@ async def phase1_identity(state: AgentState) -> AgentState:
             elif any(x in emp_est for x in ["5001+", "10000+", "5000+"]):
                 state.profile.company_size = CompanySize.ENTERPRISE
 
-        logger.info(f"[{name}] 1.2 linkedin={state.profile.linkedin_url} industry={state.profile.industry} size={state.profile.employee_count_estimate}")
+        logger.info(f"[{name}] 1.2 linkedin={state.profile.linkedin_url} industry={state.profile.industry}")
     else:
         state.profile.processing_errors.append(f"1.2 search failed: {result_12.error}")
 
@@ -208,6 +213,7 @@ async def phase1_identity(state: AgentState) -> AgentState:
     })
 
     return state
+
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -229,7 +235,6 @@ async def phase2_scale(state: AgentState) -> AgentState:
     result_21 = await buscar(query_21, num_results=8)
     state.current_phase = "2.1"
 
-    # Provide Phase 1 context to help the LLM disambiguate same-name companies.
     p1_url = state.profile.official_url or "unknown"
     p1_desc = state.profile.description or "no description available"
 
@@ -239,25 +244,36 @@ async def phase2_scale(state: AgentState) -> AgentState:
             llm,
             system_prompt=(
                 "You are a financial analyst. Determine if this company is publicly traded.\n"
-                "Return ONLY valid JSON:\n"
-                '{"is_public": true/false, "ticker": "AAPL or null", "exchange": "NASDAQ/NYSE/null", '
-                '"market_cap": "e.g. $2.5T or null"}\n'
-                "CRITICAL: Cross-reference any found stock ticker with the company's description "
-                "and URL provided below. If the ticker belongs to a company in a DIFFERENT country "
-                "or a completely different industry (e.g., finding a Tokyo Stock Exchange ticker "
-                "for a US software company, or a manufacturing ticker for a SaaS company), "
-                "discard it and return is_public: false. "
-                "Do NOT assume a ticker is correct just because company names look similar.\n"
-                "If no unambiguously matching public ticker is found, return is_public: false."
+                "CRITICAL: Be extremely aggressive in identifying stock tickers and market capitalization from the search results.\n"
+                "Look closely for ticker symbols (often in parentheses next to the company name, e.g. 'The Shyft Group(SHYF)' or 'SHYF') "
+                "and any conversational mentions of shares, stock value, trading, or market capitalization (e.g. 'shares are valued at...', "
+                "'market cap stands at 438.95M').\n"
+                "If a matching stock ticker or market cap is found/mentioned for this company, set is_public to true, "
+                "extract the ticker (e.g., 'SHYF' or 'F'), and extract the market cap (e.g., '438.95M' or '$12B').\n"
+                "Do not discard a ticker unless you are absolutely sure it belongs to an entirely different, unrelated company.\n\n"
+                "Return ONLY a valid JSON object matching this schema:\n"
+                '{"is_public": true/false, "ticker": "TICKER or null", "exchange": "EXCHANGE_OR_NULL", "market_cap": "MARKET_CAP_OR_NULL"}'
             ),
             user_content=(
-                f"Company: {name}\n"
-                f"Official URL: {p1_url}\n"
-                f"Description: {p1_desc}\n\n"
+                f"Company: {name}\nOfficial URL: {p1_url}\nDescription: {p1_desc}\n\n"
                 f"Search results:\n{result_21.text_summary}"
             ),
             output_key="public_market",
         )
+
+        try:
+            validated_21 = PublicMarketExtraction.model_validate(extracted_21)
+            extracted_21 = validated_21.model_dump()
+        except Exception:
+            is_pub = extracted_21.get("is_public")
+            if not isinstance(is_pub, bool):
+                is_pub = str(is_pub).lower() in ("true", "1", "yes")
+            extracted_21 = {
+                "is_public": is_pub,
+                "ticker": extracted_21.get("ticker") if extracted_21.get("ticker") else None,
+                "exchange": extracted_21.get("exchange") if extracted_21.get("exchange") else None,
+                "market_cap": extracted_21.get("market_cap") if extracted_21.get("market_cap") else None,
+            }
 
         if extracted_21.get("is_public"):
             state.profile.stock_ticker = extracted_21.get("ticker") or ""
@@ -268,9 +284,7 @@ async def phase2_scale(state: AgentState) -> AgentState:
 
     state = _log_step(state, "2.1_public_market", result_21, extracted_21)
 
-    # ── Step 2.2: Funding / VC rounds OR traditional revenue signals ──────────
-    # Covers both VC-backed startups (Crunchbase, Series A) and traditional
-    # companies (annual earnings reports, Q-results, revenue announcements).
+    # ── Step 2.2: Funding / VC rounds OR revenue signals ─────────────────────
     if state.profile.funding_stage != FundingStage.PUBLIC:
         query_22 = (
             f'"{name}" (crunchbase OR "funding round" OR "series A" OR "annual revenue" '
@@ -288,7 +302,7 @@ async def phase2_scale(state: AgentState) -> AgentState:
                     "Return ONLY valid JSON:\n"
                     '{"has_funding": true/false, "total_funding": "$5M or null", '
                     '"stage": "seed|series_a|series_b|series_c_plus|bootstrapped|unknown", '
-                    '"investors": ["investor1"] }\n'
+                    '"investors": ["investor1"]}\n'
                     "If no funding found, return has_funding: false and stage: unknown."
                 ),
                 user_content=f"Company: {name}\n\nSearch results:\n{result_22.text_summary}",
@@ -316,13 +330,13 @@ async def phase2_scale(state: AgentState) -> AgentState:
     if official_url:
         domain = official_url.replace("https://", "").replace("http://", "").split("/")[0]
         query_23 = (
-            f'site:{domain} ("trusted by" OR "customers" OR "teams relying on" OR "clients" OR '
-            f'"case studies" OR "success stories" OR "investor relations" OR "annual report")'
+            f'site:{domain} ("trusted by" OR "customers" OR "clients" OR '
+            f'"case studies" OR "success stories" OR "annual report")'
         )
     else:
         query_23 = (
-            f'"{name}" ("trusted by" OR "customers" OR "teams relying on" OR "clients" OR '
-            f'"case studies" OR "success stories" OR "investor relations" OR "annual report" OR "10,000 users")'
+            f'"{name}" ("trusted by" OR "customers" OR "clients" OR '
+            f'"case studies" OR "success stories" OR "annual report")'
         )
 
     result_23 = await buscar(query_23, num_results=8)
@@ -333,17 +347,12 @@ async def phase2_scale(state: AgentState) -> AgentState:
         extracted_23 = await _extract(
             llm,
             system_prompt=(
-                "You are a market analyst. Estimate customer volume and notable client logos from search results.\n"
+                "You are a market analyst. Estimate customer volume and notable client logos.\n"
                 "Return ONLY valid JSON:\n"
                 '{"customer_count_estimate": "e.g. 500+ customers or unknown", '
                 '"size_signal": "startup|smb|mid_market|enterprise|unknown", '
                 '"evidence": "brief quote or evidence"}\n'
-                "You must extract the customer count and notable logos.\n"
-                "If the exact word 'customers' is not found, look for synonyms like 'teams', 'organizations', "
-                "or 'users relying on us', and look for numbers indicating volume (e.g. '300+ teams', '10,000 users').\n"
-                "Also check investor relations pages and annual reports for precise subscriber/customer figures.\n"
-                "If you cannot find the exact number, look for milestones (e.g. 'used by over half of the Fortune 500' "
-                "or 'thousands of teams'). Do NOT default to 'unknown' if strong contextual evidence exists."
+                "Check annual reports for precise figures. Do NOT default to 'unknown' if strong contextual evidence exists."
             ),
             user_content=f"Company: {name}\n\nSearch results:\n{result_23.text_summary}",
             output_key="customers",
@@ -362,8 +371,9 @@ async def phase2_scale(state: AgentState) -> AgentState:
     return state
 
 
+
 # ─────────────────────────────────────────────────────────────────────────────
-# PHASE 3: Hiring & Growth Signals
+# PHASE 3: Hiring & Growth Signals (general)
 # ─────────────────────────────────────────────────────────────────────────────
 
 async def phase3_signals(state: AgentState) -> AgentState:
@@ -373,15 +383,12 @@ async def phase3_signals(state: AgentState) -> AgentState:
     """
     llm = _get_llm()
     name = state.company_name
-    logger.info(f"[{name}] -- PHASE 3: Growth Signals --")
+    logger.info(f"[{name}] ── PHASE 3: Growth Signals ──")
 
-    # Step 3.1: ATS / Job portals
-    # Coverage tiers:
-    #   Startup/SMB  : Wellfound, Ashby, Workable
-    #   Mid-market   : Lever, Greenhouse, SmartRecruiters
-    #   Enterprise   : Workday, Taleo (Oracle), iCIMS, SAP SuccessFactors
-    industry_ctx = state.profile.industry or "unknown"
+    industry_ctx = state.profile.industry or "Automotive / Transportation Design"
     official_url_ctx = state.profile.official_url or name
+
+    # ── Step 3.1: ATS / Job portals ──────────────────────────────────────────
     query_31 = (
         f'(site:greenhouse.io OR site:boards.greenhouse.io OR site:jobs.lever.co OR '
         f'site:*.myworkdayjobs.com OR site:jobs.taleo.net OR site:icims.com OR '
@@ -397,40 +404,60 @@ async def phase3_signals(state: AgentState) -> AgentState:
         extracted_31 = await _extract(
             llm,
             system_prompt=(
-                f"You are a talent intelligence analyst researching the company '{name}'.\n"
-                f"CRITICAL: You are researching a company in the '{industry_ctx}' sector with "
-                f"the official domain '{official_url_ctx}'. "
-                f"Discard ANY job postings that clearly belong to completely unrelated businesses "
-                f"(e.g., a local gym or a restaurant) that happen to share the same name.\n"
-                f"IMPORTANT: Do NOT aggressively filter out jobs if the company name doesn't match "
-                f"perfectly. Large enterprises use subsidiaries, parent companies, franchises, and "
-                f"sub-brands (e.g., 'Marriott Vacations' belongs to 'Marriott', 'Amazon Web Services' "
-                f"belongs to 'Amazon'). If the job is clearly part of the target company's broader "
-                f"corporate ecosystem, count it and extract it.\n"
-                "Extract active job postings from the remaining valid results.\n"
-                "Return ONLY valid JSON:\n"
-                '{"has_openings": true/false, "job_titles": ["title 1", "title 2"], '
-                '"departments": ["Engineering", "Sales"], "total_count": 5}\n'
-                "Include all unique job titles found. Be specific (e.g. 'Senior Backend Engineer' not 'Engineer').\n"
-                "If you cannot find exact role names, look for hiring milestone signals. "
-                "Do NOT return empty if strong contextual evidence of active hiring exists."
+                f"You are a talent intelligence analyst researching '{name}' "
+                f"({industry_ctx}, domain: {official_url_ctx}).\n"
+                "Discard postings that clearly belong to unrelated businesses sharing the same name.\n"
+                "Large enterprises use subsidiaries and sub-brands — count those too.\n"
+                "Return ONLY a valid JSON object matching this schema:\n"
+                '{\n'
+                '  "has_openings": true/false,\n'
+                '  "active_job_count": 5,\n'
+                '  "job_titles": ["title 1", "title 2"],\n'
+                '  "departments": ["Engineering", "Design"]\n'
+                '}\n'
+                "Enforce strict JSON output adherence. If no openings or titles are found, "
+                "set has_openings to false, active_job_count to 0, and job_titles to [].\n"
+                "Be specific with role titles (e.g. 'CMF Designer' not 'Designer')."
             ),
             user_content=f"Company: {name}\n\nSearch results:\n{result_31.text_summary}",
             output_key="jobs",
         )
 
-        if extracted_31.get("has_openings"):
-            state.profile.active_job_postings = extracted_31.get("job_titles", [])
-            state.profile.growth_signals.append(GrowthSignal.HIRING)
-            logger.info(f"[{name}] 3.1 active jobs: {len(state.profile.active_job_postings)}")
+    try:
+        validated_31 = JobPostingsExtraction.model_validate(extracted_31)
+        extracted_31 = validated_31.model_dump()
+    except Exception:
+        is_open = extracted_31.get("has_openings") if isinstance(extracted_31.get("has_openings"), bool) else False
+        job_count = extracted_31.get("active_job_count")
+        if not isinstance(job_count, int):
+            try:
+                job_count = int(job_count) if job_count is not None else 0
+            except ValueError:
+                job_count = 0
+        titles = extracted_31.get("job_titles")
+        if not isinstance(titles, list):
+            titles = []
+        deps = extracted_31.get("departments")
+        if not isinstance(deps, list):
+            deps = []
+        extracted_31 = {
+            "has_openings": is_open,
+            "active_job_count": job_count,
+            "job_titles": titles,
+            "departments": deps
+        }
+
+    if extracted_31.get("has_openings"):
+        state.profile.active_job_postings = extracted_31.get("job_titles", [])
+        state.profile.growth_signals.append(GrowthSignal.HIRING)
+        logger.info(f"[{name}] 3.1 active jobs: {len(state.profile.active_job_postings)}")
 
     state = _log_step(state, "3.1_job_postings", result_31, extracted_31)
 
     # ── Step 3.2: Expansion & growth news ────────────────────────────────────
     query_32 = (
         f'"{name}" (expansion OR "new office" OR "new market" OR "new headquarters" OR '
-        f'"hiring" OR "growing team" OR "series" OR "acqui") '
-        f'after:2024-01-01'
+        f'"hiring" OR "growing team" OR "series" OR "acqui") after:2024-01-01'
     )
     result_32 = await buscar(query_32, num_results=8)
     state.current_phase = "3.2"
@@ -440,22 +467,15 @@ async def phase3_signals(state: AgentState) -> AgentState:
         extracted_32 = await _extract(
             llm,
             system_prompt=(
-                f"You are a business intelligence analyst researching the company '{name}'.\n"
-                f"CRITICAL: You are researching a company in the '{industry_ctx}' sector with "
-                f"the official domain '{official_url_ctx}'. "
-                f"Discard ANY news or signals that belong to local businesses, retail stores, gyms, "
-                f"restaurants, or unrelated entities that happen to share the same name. "
-                f"Only include results clearly about the company '{name}' at the above domain.\n"
-                "Extract expansion and growth signals from the remaining valid results.\n"
+                f"You are a business intelligence analyst researching '{name}' "
+                f"({industry_ctx}, domain: {official_url_ctx}).\n"
+                "Discard news about unrelated local businesses sharing the same name.\n"
                 "Return ONLY valid JSON:\n"
-                '{"has_signals": true/false, "news_headlines": ["headline 1", "headline 2"], '
+                '{"has_signals": true/false, "news_headlines": ["headline 1"], '
                 '"signal_types": ["expanding", "hiring", "funded", "contracting", "stable"], '
                 '"summary": "brief one-line summary"}\n'
-                "signal_types must be from: expanding, hiring, funded, contracting, stable\n"
-                "CRITICAL: Only apply the 'contracting' signal if there is EXPLICIT evidence in the "
-                "text of layoffs, downsizing, office closures, or massive revenue decline. "
-                "NEVER infer or guess 'contracting' from an absence of data, "
-                "neutral corporate restructuring, or general market uncertainty.\n"
+                "signal_types must be from: expanding, hiring, funded, contracting, stable.\n"
+                "Only apply 'contracting' if there is EXPLICIT evidence of layoffs or office closures.\n"
                 "Only include news from the last 18 months."
             ),
             user_content=f"Company: {name}\n\nSearch results:\n{result_32.text_summary}",
@@ -479,20 +499,247 @@ async def phase3_signals(state: AgentState) -> AgentState:
     return state
 
 
+
 # ─────────────────────────────────────────────────────────────────────────────
-# PHASE 4: LLM Synthesis / Analyst Summary
+# PHASE 4: Automotive Design Signals (the 8 new ICP signals)
 # ─────────────────────────────────────────────────────────────────────────────
 
-async def phase4_synthesis(state: AgentState) -> AgentState:
+async def phase4_automotive_signals(state: AgentState) -> AgentState:
     """
-    Generate a final analyst summary from all collected data.
-    This is the human-readable conclusion that goes into the summary CSV.
+    The core new phase targeting Automotive & Transportation Design companies in Michigan.
+
+    Sub-steps:
+      4.1 — Signal 1 & 2: Internal creative team + creative support need
+      4.2 — Signal 3 & 4: Creative tech stack + enterprise software budget
+      4.3 — Signal 5:     Creative/Design/Engineering job postings
+      4.4 — Signal 6:     Upskilling / workforce development programs
+      4.5 — Signal 7 & 8: Creative leadership + Michigan local involvement
     """
     llm = _get_llm()
     name = state.company_name
-    logger.info(f"[{name}] ── PHASE 4: Synthesis ──")
+    sigs = state.profile.automotive_signals  # AutomotiveDesignSignals instance
+    logger.info(f"[{name}] ── PHASE 4: Automotive Design Signals ──")
+
+    # ── Step 4.1: Internal Creative Team & Creative Support Need ─────────────
+    # Search the company site + LinkedIn for studio/design-team mentions.
+    query_41 = (
+        f'"{name}" Michigan ('
+        f'"design studio" OR "creative team" OR "CMF" OR "interior design" '
+        f'OR "exterior design" OR "transportation design" OR "creative director" '
+        f'OR "design agency" OR "design consultancy" OR "creative services")'
+    )
+    result_41 = await buscar(query_41, num_results=8)
+    state.current_phase = "4.1"
+
+    extracted_41 = {}
+    if result_41.success and result_41.organic:
+        extracted_41 = await _extract(
+            llm,
+            system_prompt=(
+                "You are a Creative Services Intelligence analyst specializing in automotive design.\n"
+                "Analyze the search results and determine:\n"
+                "1. Does this company have an INTERNAL creative/design team or studio?\n"
+                "2. Does this company show signs of NEEDING external creative support "
+                "(RFPs, partnerships with design agencies, outsourcing mentions)?\n"
+                "Return ONLY valid JSON:\n"
+                '{"has_internal_creative_team": true/false, '
+                '"internal_creative_team_evidence": "brief evidence string", '
+                '"requires_creative_support": true/false, '
+                '"creative_support_evidence": "brief evidence string"}'
+            ),
+            user_content=f"Company: {name} (Michigan automotive/transportation design)\n\nSearch results:\n{result_41.text_summary}",
+            output_key="creative_team",
+        )
+        sigs.has_internal_creative_team = extracted_41.get("has_internal_creative_team", False)
+        sigs.internal_creative_team_evidence = extracted_41.get("internal_creative_team_evidence", "")
+        sigs.requires_creative_support = extracted_41.get("requires_creative_support", False)
+        sigs.creative_support_evidence = extracted_41.get("creative_support_evidence", "")
+        logger.info(f"[{name}] 4.1 internal_team={sigs.has_internal_creative_team} support_need={sigs.requires_creative_support}")
+
+    state = _log_step(state, "4.1_creative_team", result_41, extracted_41)
+
+    # ── Step 4.2: Creative Tech Stack + Enterprise Software Budget ────────────
+    # Target keywords: Autodesk Alias, Autodesk VRED, Adobe, Unity, Unreal, ZBrush, CATIA
+    query_42 = (
+        f'"{name}" ('
+        f'"Autodesk Alias" OR "Autodesk VRED" OR "Adobe Creative" OR "Unity" OR '
+        f'"Unreal Engine" OR "CATIA" OR "Rhino" OR "ZBrush" OR "SolidWorks" OR '
+        f'"enterprise license" OR "software license" OR "digital prototyping" OR "3D visualization")'
+    )
+    result_42 = await buscar(query_42, num_results=8)
+    state.current_phase = "4.2"
+
+    extracted_42 = {}
+    if result_42.success and result_42.organic:
+        extracted_42 = await _extract(
+            llm,
+            system_prompt=(
+                "You are a Creative Tech Stack analyst for automotive and transportation design.\n"
+                "Identify which creative/design software tools this company uses or mentions.\n"
+                "Also infer if they purchase enterprise software licenses (job posts requiring tool proficiency, "
+                "press releases about software partnerships, digital transformation announcements).\n"
+                "Return ONLY valid JSON:\n"
+                '{"detected_creative_tools": ["Autodesk Alias", "Unreal Engine"], '
+                '"tech_stack_evidence": "brief evidence string", '
+                '"has_enterprise_software_budget": true/false, '
+                '"budget_evidence": "brief evidence string"}'
+            ),
+            user_content=f"Company: {name}\n\nSearch results:\n{result_42.text_summary}",
+            output_key="tech_stack",
+        )
+        sigs.detected_creative_tools = extracted_42.get("detected_creative_tools", [])
+        sigs.tech_stack_evidence = extracted_42.get("tech_stack_evidence", "")
+        sigs.has_enterprise_software_budget = extracted_42.get("has_enterprise_software_budget", False)
+        sigs.budget_evidence = extracted_42.get("budget_evidence", "")
+        logger.info(f"[{name}] 4.2 tools={sigs.detected_creative_tools} budget={sigs.has_enterprise_software_budget}")
+
+    state = _log_step(state, "4.2_tech_stack", result_42, extracted_42)
+
+    # ── Step 4.3: Creative/Design/Engineering Hiring ──────────────────────────
+    # Specifically target creative roles: CMF, Transportation Designer, UX/UI for mobility, etc.
+    query_43 = (
+        f'"{name}" jobs ('
+        f'"transportation designer" OR "automotive designer" OR "CMF designer" '
+        f'"industrial designer" OR "exterior designer" OR "interior designer" OR '
+        f'"creative director" OR "UX designer" OR "3D artist" OR "visualization engineer" '
+        f'OR "design engineer" OR "Alias modeler" OR "surface designer") site:linkedin.com OR site:indeed.com OR site:glassdoor.com'
+    )
+    result_43 = await buscar(query_43, num_results=10)
+    state.current_phase = "4.3"
+
+    extracted_43 = {}
+    if result_43.success and result_43.organic:
+        extracted_43 = await _extract(
+            llm,
+            system_prompt=(
+                "You are a Talent Intelligence analyst for automotive and transportation design.\n"
+                "Identify active job postings specifically for creative, design, or design-engineering roles.\n"
+                "Focus on: Transportation Designers, CMF Designers, Industrial Designers, "
+                "UX/UI Designers for mobility, 3D Artists, Visualization Engineers, Alias Modelers, "
+                "Creative Directors, Design Engineers.\n"
+                "Return ONLY valid JSON:\n"
+                '{"is_hiring_creative_roles": true/false, '
+                '"creative_job_titles": ["CMF Designer", "Transportation Designer"], '
+                '"hiring_evidence": "brief evidence string"}'
+            ),
+            user_content=f"Company: {name}\n\nSearch results:\n{result_43.text_summary}",
+            output_key="creative_hiring",
+        )
+        sigs.is_hiring_creative_roles = extracted_43.get("is_hiring_creative_roles", False)
+        sigs.creative_job_titles = extracted_43.get("creative_job_titles", [])
+        sigs.hiring_evidence = extracted_43.get("hiring_evidence", "")
+        logger.info(f"[{name}] 4.3 hiring_creative={sigs.is_hiring_creative_roles} roles={sigs.creative_job_titles}")
+
+    state = _log_step(state, "4.3_creative_hiring", result_43, extracted_43)
+
+    # ── Step 4.4: Upskilling / Workforce Development ──────────────────────────
+    query_44 = (
+        f'"{name}" Michigan ('
+        f'"workforce development" OR "upskilling" OR "professional development" '
+        f'OR "training program" OR "apprenticeship" OR "tuition reimbursement" '
+        f'OR "learning & development" OR "college partnership" OR "community college" '
+        f'OR "MEDC" OR "workforce training grant")'
+    )
+    result_44 = await buscar(query_44, num_results=8)
+    state.current_phase = "4.4"
+
+    extracted_44 = {}
+    if result_44.success and result_44.organic:
+        extracted_44 = await _extract(
+            llm,
+            system_prompt=(
+                "You are a Workforce Development analyst specializing in Michigan automotive companies.\n"
+                "Determine if the company offers or participates in upskilling, professional development, "
+                "or workforce training programs (internal programs, community college partnerships, "
+                "MEDC grants, apprenticeship programs, tuition reimbursement, etc.).\n"
+                "Return ONLY valid JSON:\n"
+                '{"offers_upskilling": true/false, '
+                '"upskilling_programs": ["Ford College Graduate Program", "MEDC Training Grant"], '
+                '"upskilling_evidence": "brief evidence string"}'
+            ),
+            user_content=f"Company: {name} (Michigan)\n\nSearch results:\n{result_44.text_summary}",
+            output_key="upskilling",
+        )
+        sigs.offers_upskilling = extracted_44.get("offers_upskilling", False)
+        sigs.upskilling_programs = extracted_44.get("upskilling_programs", [])
+        sigs.upskilling_evidence = extracted_44.get("upskilling_evidence", "")
+        logger.info(f"[{name}] 4.4 upskilling={sigs.offers_upskilling}")
+
+    state = _log_step(state, "4.4_upskilling", result_44, extracted_44)
+
+    # ── Step 4.5: Creative Leadership + Michigan Local Involvement ────────────
+    query_45 = (
+        f'"{name}" Michigan ('
+        f'"Chief Design Officer" OR "VP of Design" OR "Head of Design" OR "Design Director" '
+        f'OR "Creative Director" OR "design leadership" OR '
+        f'"MEDC" OR "Michigan Economic Development" OR "community college alliance" '
+        f'OR "workforce pipeline" OR "preservation registry" OR "local grant" '
+        f'OR "regional association" OR "Detroit Design" OR "UM-Dearborn" OR "Macomb")'
+    )
+    result_45 = await buscar(query_45, num_results=8)
+    state.current_phase = "4.5"
+
+    extracted_45 = {}
+    if result_45.success and result_45.organic:
+        extracted_45 = await _extract(
+            llm,
+            system_prompt=(
+                "You are a Regional Business Intelligence analyst for the Michigan automotive design ecosystem.\n"
+                "From the search results, determine:\n"
+                "1. Does the company have a recognized leadership position in Creative/Design "
+                "(C-suite or VP-level design executive, award-winning design leader, etc.)?\n"
+                "2. Does the company have active local Michigan involvement: MEDC grants, "
+                "community college alliances, preservation registries, Detroit Design events, "
+                "regional workforce pipeline programs, or similar regional associations?\n"
+                "Return ONLY valid JSON:\n"
+                '{"has_creative_leadership": true/false, '
+                '"creative_leadership_titles": ["Chief Design Officer", "VP of Transportation Design"], '
+                '"leadership_evidence": "brief evidence string", '
+                '"has_michigan_local_involvement": true/false, '
+                '"michigan_involvement_details": ["MEDC grant 2024", "Macomb CC partnership"], '
+                '"michigan_involvement_evidence": "brief evidence string"}'
+            ),
+            user_content=f"Company: {name} (Michigan)\n\nSearch results:\n{result_45.text_summary}",
+            output_key="leadership_michigan",
+        )
+        sigs.has_creative_leadership = extracted_45.get("has_creative_leadership", False)
+        sigs.creative_leadership_titles = extracted_45.get("creative_leadership_titles", [])
+        sigs.leadership_evidence = extracted_45.get("leadership_evidence", "")
+        sigs.has_michigan_local_involvement = extracted_45.get("has_michigan_local_involvement", False)
+        sigs.michigan_involvement_details = extracted_45.get("michigan_involvement_details", [])
+        sigs.michigan_involvement_evidence = extracted_45.get("michigan_involvement_evidence", "")
+        logger.info(
+            f"[{name}] 4.5 leadership={sigs.has_creative_leadership} "
+            f"mi_involvement={sigs.has_michigan_local_involvement}"
+        )
+
+    state = _log_step(state, "4.5_leadership_michigan", result_45, extracted_45)
+
+    # Commit the updated signals object back to the profile
+    state.profile.automotive_signals = sigs
+
+    return state
+
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# PHASE 5: LLM Synthesis — Creative Services & Transportation Design Strategist
+# ─────────────────────────────────────────────────────────────────────────────
+
+async def phase5_synthesis(state: AgentState) -> AgentState:
+    """
+    Generate a final analyst summary from all collected data.
+    The LLM acts as a Creative Services & Transportation Design Strategist,
+    scoring the company 1-10 as a potential client for high-end creative
+    services or 3D/Design enterprise software.
+    """
+    llm = _get_llm()
+    name = state.company_name
+    logger.info(f"[{name}] ── PHASE 5: Synthesis ──")
 
     profile = state.profile
+    sigs = profile.automotive_signals
+
     context = f"""
 Company: {name}
 Official URL: {profile.official_url}
@@ -508,45 +755,80 @@ Stock Ticker: {profile.stock_ticker or 'N/A (private)'}
 Market Cap: {profile.market_cap or 'N/A'}
 Customer Estimate: {profile.customer_count_estimate or 'N/A'}
 
-== GROWTH SIGNALS ==
+== GENERAL GROWTH SIGNALS ==
 Growth Signals: {', '.join(s.value for s in profile.growth_signals) or 'none detected'}
 Active Job Postings ({len(profile.active_job_postings)} found):
 {chr(10).join(f'  - {j}' for j in profile.active_job_postings[:10]) or '  None found'}
 Expansion News:
 {chr(10).join(f'  - {n}' for n in profile.expansion_news[:5]) or '  None found'}
 
-== ERRORS ==
+== AUTOMOTIVE DESIGN SIGNALS (8 ICP Signals) ==
+Signal 1 — Internal Creative Team: {sigs.has_internal_creative_team}
+  Evidence: {sigs.internal_creative_team_evidence or 'N/A'}
+
+Signal 2 — Requires Creative Support: {sigs.requires_creative_support}
+  Evidence: {sigs.creative_support_evidence or 'N/A'}
+
+Signal 3 — Detected Creative Tools: {', '.join(sigs.detected_creative_tools) or 'None detected'}
+  Evidence: {sigs.tech_stack_evidence or 'N/A'}
+
+Signal 4 — Enterprise Software Budget: {sigs.has_enterprise_software_budget}
+  Evidence: {sigs.budget_evidence or 'N/A'}
+
+Signal 5 — Hiring Creative/Design Roles: {sigs.is_hiring_creative_roles}
+  Creative Job Titles: {', '.join(sigs.creative_job_titles) or 'None'}
+  Evidence: {sigs.hiring_evidence or 'N/A'}
+
+Signal 6 — Offers Upskilling/Workforce Dev: {sigs.offers_upskilling}
+  Programs: {', '.join(sigs.upskilling_programs) or 'None'}
+  Evidence: {sigs.upskilling_evidence or 'N/A'}
+
+Signal 7 — Creative/Design Leadership: {sigs.has_creative_leadership}
+  Leadership Titles: {', '.join(sigs.creative_leadership_titles) or 'None'}
+  Evidence: {sigs.leadership_evidence or 'N/A'}
+
+Signal 8 — Michigan Local Involvement: {sigs.has_michigan_local_involvement}
+  Details: {', '.join(sigs.michigan_involvement_details) or 'None'}
+  Evidence: {sigs.michigan_involvement_evidence or 'N/A'}
+
+== PROCESSING ERRORS ==
 {chr(10).join(profile.processing_errors) or 'None'}
 """
 
     extracted = await _extract(
         llm,
         system_prompt=(
-            "You are a senior B2B sales intelligence analyst. Based on the research data, "
-            "write a concise ICP (Ideal Customer Profile) assessment.\n"
+            "You are a senior Creative Services & Transportation Design Strategist, "
+            "specializing in the Michigan automotive and mobility design ecosystem. "
+            "Your role is to evaluate whether a target company is an ideal client for:\n"
+            "  (a) High-end creative services (design consulting, CMF strategy, concept development), OR\n"
+            "  (b) 3D/Design enterprise software (Autodesk Alias, Unreal Engine, Adobe, Unity, etc.).\n\n"
+            "Evaluate all 8 ICP signals provided and produce a comprehensive assessment.\n\n"
+            "ICP Score Rubric (1–10):\n"
+            "  9-10: Has internal design team + enterprise tools + hiring + Michigan presence — prime target\n"
+            "  7-8:  Strong signals in 4-6 areas — strong prospect, reach out soon\n"
+            "  5-6:  Signals in 2-3 areas — worth monitoring; nurture relationship\n"
+            "  3-4:  Weak or indirect signals — low priority, limited fit\n"
+            "  1-2:  No meaningful design signals — skip\n\n"
             "Return ONLY valid JSON:\n"
-            '{"summary": "3-5 sentence assessment", "icp_score": 1-10, '
+            '{"summary": "3-5 sentence strategic assessment of fit as a creative services / enterprise software client", '
+            '"icp_score": 7, '
             '"recommended_action": "reach_out|monitor|skip|research_more", '
-            '"key_buying_signals": ["signal 1", "signal 2"]}\n'
-            "icp_score: 10=perfect fit, 1=poor fit. "
-            "recommended_action: reach_out=strong signals now, monitor=potential future, "
-            "skip=wrong fit, research_more=insufficient data.\n"
-            "COMPANY SIZE INFERENCE RULES (apply when explicit employee count is missing):\n"
-            "  - If the company is publicly traded OR has raised >$100M in funding -> classify as at least 'mid_market'.\n"
-            "  - If market cap exceeds $1B -> classify as 'enterprise'.\n"
-            "  - If funding is seed/angel stage or market cap is small (<$50M) -> 'startup' or 'smb'.\n"
-            "  - Do NOT default to 'smb' or 'startup' simply because the employee count field is empty; "
-            "    always cross-reference funding stage, ticker, and market cap first."
+            '"key_buying_signals": ["signal 1", "signal 2"], '
+            '"strategic_notes": "specific outreach angle or product fit recommendation"}'
         ),
         user_content=context,
         output_key="synthesis",
     )
 
     state.profile.analyst_summary = extracted.get("summary", "")
-    # Store extra fields in search_logs for reference
+    state.profile.icp_score = extracted.get("icp_score", 0)
+    state.profile.recommended_action = extracted.get("recommended_action", "")
+    state.profile.key_buying_signals = extracted.get("key_buying_signals", [])
+
     synthesis_log = SearchStepLog(
         company_name=name,
-        phase="4.0_synthesis",
+        phase="5.0_synthesis",
         query_or_url="[LLM synthesis - no search]",
         backend_used="llm",
         extracted_data=extracted,
@@ -556,5 +838,16 @@ Expansion News:
     state.search_logs.append(synthesis_log)
     state.is_done = True
 
-    logger.info(f"[{name}] ✅ Done. Score={extracted.get('icp_score')} Action={extracted.get('recommended_action')}")
+    logger.info(
+        f"[{name}] ✅ Done. ICP Score={extracted.get('icp_score')} "
+        f"Action={extracted.get('recommended_action')}"
+    )
     return state
+
+
+# ── Backwards-compatibility alias (graph.py references phase4_synthesis) ──────
+# The old phase4 is now split into phase4_automotive_signals + phase5_synthesis.
+# graph.py must be updated to add the new node. This alias allows existing
+# imports to remain valid during a phased migration.
+phase4_synthesis = phase5_synthesis
+

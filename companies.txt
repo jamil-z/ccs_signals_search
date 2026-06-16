@@ -1,17 +1,83 @@
-# List of companies to analyze — one per line
-# Lines starting with # are comments and are ignored
-# The agent will only take the company name; you can also put the domain
-# Example:
-# Moodbit
-# Salesforce
-# HubSpot
+# Michigan Automotive & Transportation Design Companies — ICP Target List
+# Lines starting with # are comments and are ignored.
+# Geographic focus: Detroit metro area, Michigan
 
-Chronosphere
-SmithRx
-Recurly
-The Call Gurus
-New Visions for Public Schools
-WorkWave
-CINC
-Accela
-WorkWave
+# ── OEM Design Centers ────────────────────────────────────────────────────────
+#Ford Motor Company
+#General Motors
+#Stellantis
+
+# ── Automotive & Transportation Design Consultancies ─────────────────────────
+#Middlecott
+#Sundberg-Ferar
+#Stellantis Design Studio
+#Italdesign USA
+
+# ── Engineering, Prototyping & Concept Vehicle Companies ─────────────────────
+#Prefix Corporation
+#Intent Design
+#Future Engineering
+#G.M. Bassett Pattern
+#Berryer Design
+
+# ── Specialty Vehicle & Transportation Companies ──────────────────────────────
+Lear Corporation
+Adient
+Visteon Corporation
+Cooper Standard
+IAC Group
+Cadillac
+Yazaki North America
+Hyundai America Technical Center, Inc. (HATCI)
+Dura Automotive Systems LLC
+Shape Corp.
+Tower International
+Toyoda Gosei Americas
+Henniges Automotive
+PTI DESIGN
+Automotive Industries
+JAC Products
+HIROTEC AMERICA, Inc.
+Superior Industries
+Edscha
+Mayco International
+TRAM, Inc.
+Humanetics
+Summit Polymers
+Lacks Enterprises
+NHK International Corporation
+Eagle Ottawa
+MARTIN Technologies - MARTIN Motorsports
+VLF Automotive
+Prefix Corporation
+LUXIT Group
+Changan US R&D Center
+Howa USA Holdings, Inc
+Katayama Manufacturing
+Auto/Steel Partnership
+SAE Detroit Section
+SPE Automotive Div.
+NETFORM
+VentureSource
+UNIWHEELS AG
+Extreme Vehicle Concepts
+North American Assembly
+Magna CarTopSystems
+Champion Plastics, Inc.
+Ogura Corporation
+Michigan State Formula Racing
+asbe Foundation
+Haven Innovation, Inc.
+D&F Corporation
+Muscat Design LLC
+Bulldog Bolt - General Motors SAE AutoDrive
+RJS TOOL & GAGE
+GVSU Laker Racing
+AACS (Advanced Automotive Consulting Services, LLC)
+Michigan Vehicle Solutions
+Kettering University Formula SAE
+Label Motorsports
+Detroit Headers, LLC
+DRIVE One Detroit
+Global Power Systems - Engineering
+D$T Industries
