@@ -19,7 +19,7 @@ venv/
 env/
 
 # Outputs (optional - comment out if you want to track outputs in git)
-outputs/
+# outputs/
 
 # Node (for npx MCP servers)
 node_modules/
