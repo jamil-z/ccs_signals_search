@@ -1,0 +1,17 @@
+# List of companies to analyze — one per line
+# Lines starting with # are comments and are ignored
+# The agent will only take the company name; you can also put the domain
+# Example:
+# Moodbit
+# Salesforce
+# HubSpot
+
+Chronosphere
+SmithRx
+Recurly
+The Call Gurus
+New Visions for Public Schools
+WorkWave
+CINC
+Accela
+WorkWave

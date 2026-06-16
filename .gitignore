@@ -1,16 +1,35 @@
-# Python
-__pycache__/
-*.py[cod]
-*.class
-.venv/
+# ICP Search Engine — .gitignore
 
 # Environment
 .env
+.env.local
 
-# Logs and Data
-outputs/cache/
-outputs/*.log
-outputs/*.csv
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+dist/
+build/
+.eggs/
 
-# System
+# Virtual env
+.venv/
+venv/
+env/
+
+# Outputs (optional - comment out if you want to track outputs in git)
+outputs/
+
+# Node (for npx MCP servers)
+node_modules/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
 .DS_Store
+Thumbs.db

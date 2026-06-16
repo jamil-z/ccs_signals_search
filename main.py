@@ -1,164 +1,280 @@
 """
-main.py — QSR Signal Extraction Engine entry point.
+main.py — Entry point for the ICP Search Engine.
 
 Usage:
-    .venv/bin/python main.py
-    .venv/bin/python main.py --leads leads.txt --concurrency 2
-
-leads.txt format (one per line):
-    Company Name, domain.com
-    Company Name          <- domain inferred as companyname.com
-    # comment lines ignored
+    python main.py                          # uses companies.txt
+    python main.py --company "Moodbit"      # single company
+    python main.py --companies "A,B,C"      # comma-separated list
+    python main.py --file my_list.txt       # custom file
+    python main.py --backend playwright     # override search backend
 """
+
 from __future__ import annotations
-import argparse, asyncio, re, sys, uuid
+
+import argparse
+import asyncio
+import logging
+import sys
 from pathlib import Path
-import structlog
-from browser_utils import close_browser
-from config import configure_stdlib_logging, get_settings
-from graph_orchestrator import graph
-from schemas import GraphState, Lead
 
-configure_stdlib_logging()
-Path("outputs").mkdir(parents=True, exist_ok=True)
-_log_file = open("outputs/pipeline.log", "a", encoding="utf-8")
-
-structlog.configure(
-    processors=[
-        structlog.stdlib.add_log_level,
-        structlog.processors.TimeStamper(fmt="iso"),
-        structlog.dev.ConsoleRenderer(colors=False),
-    ],
-    wrapper_class=structlog.make_filtering_bound_logger(20),
-    context_class=dict,
-    logger_factory=structlog.PrintLoggerFactory(file=_log_file),
+import nest_asyncio
+from rich.console import Console
+from rich.logging import RichHandler
+from rich.progress import (
+    BarColumn,
+    MofNCompleteColumn,
+    Progress,
+    SpinnerColumn,
+    TextColumn,
+    TimeElapsedColumn,
 )
-logger = structlog.get_logger("main")
+from rich.table import Table
+
+import config
+from csv_writer import ResultsWriter
+from graph import run_company
+from schemas import AgentState
+
+# Fix nested event loops (needed in some environments)
+nest_asyncio.apply()
+
+logger = logging.getLogger(__name__)
+console = Console()
 
 
-def _infer_domain(name: str) -> str:
-    return re.sub(r"[^a-z0-9]", "", name.lower()) + ".com"
+# ── Logging setup ─────────────────────────────────────────────────────────────
+
+def setup_logging(level: str = "INFO"):
+    logging.basicConfig(
+        level=getattr(logging, level.upper(), logging.INFO),
+        format="%(message)s",
+        datefmt="[%X]",
+        handlers=[
+            RichHandler(console=console, rich_tracebacks=True, markup=True),
+        ],
+    )
+    # Quieten noisy libraries
+    for noisy in ("httpx", "httpcore", "openai", "langchain", "playwright"):
+        logging.getLogger(noisy).setLevel(logging.WARNING)
 
 
-def load_leads(path: Path) -> list[Lead]:
-    if not path.exists():
-        logger.error("leads_file.not_found", path=str(path)); sys.exit(1)
-    leads: list[Lead] = []
-    for i, raw in enumerate(path.read_text(encoding="utf-8").splitlines(), 1):
-        line = raw.strip()
-        if not line or line.startswith("#"): continue
-        if "," in line:
-            parts = [p.strip() for p in line.split(",", 1)]
-            name, domain = parts[0], parts[1] if len(parts) > 1 and parts[1] else _infer_domain(parts[0])
-        else:
-            name, domain = line, _infer_domain(line)
-        try:
-            leads.append(Lead(company_name=name, company_domain=domain))
-        except Exception as exc:
-            logger.warning("lead.invalid", line=i, raw=line, error=str(exc))
-    if not leads:
-        logger.error("leads_file.empty", path=str(path)); sys.exit(1)
+# ── Company list loading ──────────────────────────────────────────────────────
 
-    # Deduplicate by domain (case-insensitive)
-    seen_domains: set[str] = set()
-    unique_leads: list[Lead] = []
-    for lead in leads:
-        key = lead.company_domain.lower()
-        if key in seen_domains:
-            logger.warning("lead.duplicate_skipped", company=lead.company_name, domain=lead.company_domain)
-            continue
-        seen_domains.add(key)
-        unique_leads.append(lead)
+def load_companies(file_path: Path) -> list[str]:
+    """Read company names from a .txt file (one per line, # = comment)."""
+    if not file_path.exists():
+        console.print(f"[red]File not found:[/red] {file_path}")
+        sys.exit(1)
 
-    skipped = len(leads) - len(unique_leads)
-    logger.info("leads.loaded", count=len(unique_leads), duplicates_skipped=skipped)
-    return unique_leads
+    companies = []
+    for line in file_path.read_text(encoding="utf-8").splitlines():
+        line = line.strip()
+        if line and not line.startswith("#"):
+            companies.append(line)
+
+    if not companies:
+        console.print("[red]No companies found in file. Check for empty lines or all comments.[/red]")
+        sys.exit(1)
+
+    return companies
 
 
-async def enrich_lead(lead: Lead, semaphore: asyncio.Semaphore) -> dict:
-    async with semaphore:
-        run_id = str(uuid.uuid4())[:8]
-        logger.info("lead.start", run_id=run_id, company=lead.company_name)
-        state: GraphState = {
-            "run_id": run_id, "lead": lead, "raw_signals": None,
-            "csv_row": None, "step_logs": [], "error_count": 0, "fatal_error": "",
-        }
-        try:
-            final: GraphState = await graph.ainvoke(state)
-        except Exception as exc:
-            logger.error("lead.crashed", run_id=run_id, company=lead.company_name, error=str(exc)[:300])
-            return {"company": lead.company_name, "domain": lead.company_domain, "status": "CRASHED", "error": str(exc)[:200]}
-        row = final.get("csv_row")
-        errors = final.get("error_count", 0)
-        status = "SUCCESS" if errors == 0 else f"PARTIAL ({errors} errors)"
-        logger.info("lead.complete", run_id=run_id, company=lead.company_name, status=status)
-        return {
-            "company": lead.company_name, "status": status,
-            "expansion": row.expansion_detected if row else False,
-            "open_roles": row.open_requisitions if row else 0,
-            "churn": row.churn_anomalies if row else 0,
-            "consolidation": row.consolidation_detected if row else False,
-            "confidence": row.llm_confidence_score if row else 0.0,
-        }
+def deduplicate_companies(companies: list[str]) -> list[str]:
+    """
+    Remove duplicate company names while preserving the original order.
+
+    Uses dict.fromkeys() which is O(n) and guarantees insertion-order
+    deduplication (Python 3.7+). Comparison is case-sensitive — 'Asana'
+    and 'asana' are treated as distinct inputs.
+    """
+    deduplicated = list(dict.fromkeys(companies))
+    dropped = len(companies) - len(deduplicated)
+    if dropped > 0:
+        logger.warning(
+            f"Input deduplication: removed {dropped} duplicate "
+            f"entr{'y' if dropped == 1 else 'ies'} from the company list."
+        )
+    return deduplicated
 
 
-async def run_pipeline(leads_path: Path, max_concurrent: int) -> None:
-    leads = load_leads(leads_path)
-    settings = get_settings()
-    
-    # Clean up old output files to prevent duplicating company rows from previous runs
-    if settings.csv_output_path.exists():
-        settings.csv_output_path.unlink()
-    summary_path = Path(settings.output_dir) / "summary.csv"
-    if summary_path.exists():
-        summary_path.unlink()
+# ── Semaphore-controlled concurrent runner ────────────────────────────────────
 
+async def run_all(
+    companies: list[str],
+    writer: ResultsWriter,
+    max_concurrent: int,
+) -> list[AgentState]:
+    """
+    Run the pipeline for all companies with controlled concurrency.
+    Uses a semaphore to limit parallel executions, then writes results
+    to CSV as each company completes (incremental output).
+    """
     semaphore = asyncio.Semaphore(max_concurrent)
-    logger.info("pipeline.start", total=len(leads), concurrency=max_concurrent, output=str(settings.csv_output_path))
-    
-    print(f"\n🚀 Starting pipeline for {len(leads)} leads (concurrency={max_concurrent})...")
-    print("All detailed logs are being written to 'outputs/pipeline.log'\n")
-    
-    tasks = [enrich_lead(l, semaphore) for l in leads]
-    results = []
-    
-    from tqdm import tqdm
-    with tqdm(total=len(leads), desc="Processing QSR Leads", unit="lead") as pbar:
-        for coro in asyncio.as_completed(tasks):
-            res = await coro
-            results.append(res)
-            comp = res.get("company", "")
-            stat = res.get("status", "")
-            pbar.set_postfix_str(f"Last: {comp[:15]} ({stat})")
-            pbar.update(1)
-            
-    await close_browser()
-    W = 76
-    print("\n" + "=" * W)
-    print("  QSR SIGNAL EXTRACTION ENGINE — COMPLETE")
-    print("=" * W)
-    print(f"  {'COMPANY':<30} {'STATUS':<18} {'EXP':>4} {'ROLES':>6} {'CHURN':>5} {'CONF':>5}")
-    print("-" * W)
-    for r in results:
-        exp_icon = "EXP" if r.get('expansion') else "---"
-        print(f"  {r.get('company',''):<30} {r.get('status',''):<18} "
-              f"{exp_icon:>5} {r.get('open_roles',0):>6} "
-              f"{r.get('churn',0):>5} {r.get('confidence',0.0):>5.2f}")
-    success = sum(1 for r in results if "SUCCESS" in r.get("status",""))
-    print("=" * W)
-    print(f"  Total: {len(results)} | Success: {success} | Failed: {len(results)-success}")
-    print(f"  Output: {settings.csv_output_path}")
-    print("=" * W + "\n")
+    write_lock = asyncio.Lock()
+    results: list[AgentState] = []
+
+    with Progress(
+        SpinnerColumn(),
+        TextColumn("[bold blue]{task.description}"),
+        BarColumn(),
+        MofNCompleteColumn(),
+        TimeElapsedColumn(),
+        console=console,
+    ) as progress:
+        task_id = progress.add_task("Processing companies…", total=len(companies))
+
+        async def process_one(company: str) -> AgentState:
+            async with semaphore:
+                state = await run_company(company)
+                async with write_lock:
+                    writer.write_company(state)
+                progress.advance(task_id)
+                return state
+
+        results = await asyncio.gather(
+            *[process_one(c) for c in companies],
+            return_exceptions=False,
+        )
+
+    return list(results)
 
 
-def _build_parser() -> argparse.ArgumentParser:
-    s = get_settings()
-    p = argparse.ArgumentParser(description="QSR Signal Extraction Engine")
-    p.add_argument("--leads", type=Path, default=s.leads_file_path)
-    p.add_argument("--concurrency", type=int, default=s.max_concurrent_leads)
-    return p
+# ── Summary table ─────────────────────────────────────────────────────────────
+
+def print_summary(results: list[AgentState]):
+    table = Table(title="🎯 ICP Search Results", show_lines=True)
+    table.add_column("Company", style="bold cyan", no_wrap=True)
+    table.add_column("Size", style="yellow")
+    table.add_column("Industry")
+    table.add_column("Funding", style="green")
+    table.add_column("Signals", style="magenta")
+    table.add_column("Jobs", justify="center")
+    table.add_column("Action", style="bold")
+
+    for state in results:
+        p = state.profile
+        signals = ", ".join(s.value for s in p.growth_signals) or "—"
+        # Extract recommended_action from synthesis log if available
+        action = "—"
+        for log in reversed(state.search_logs):
+            if log.phase == "4.0_synthesis":
+                action = log.extracted_data.get("recommended_action", "—")
+                break
+
+        table.add_row(
+            p.company_name,
+            p.company_size.value,
+            p.industry or "—",
+            p.funding_stage.value,
+            signals,
+            str(len(p.active_job_postings)),
+            action,
+        )
+
+    console.print(table)
+
+
+# ── CLI ───────────────────────────────────────────────────────────────────────
+
+def parse_args() -> argparse.Namespace:
+    parser = argparse.ArgumentParser(
+        description="ICP Search Engine — Research any company's profile and growth signals",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog="""
+Examples:
+  python main.py
+  python main.py --company "Moodbit"
+  python main.py --companies "Salesforce,HubSpot,Notion"
+  python main.py --file my_leads.txt --backend serper
+  python main.py --company "OpenAI" --backend playwright
+        """,
+    )
+    parser.add_argument(
+        "--company", type=str,
+        help="Single company name to research",
+    )
+    parser.add_argument(
+        "--companies", type=str,
+        help="Comma-separated list of company names",
+    )
+    parser.add_argument(
+        "--file", type=Path, default=None,
+        help=f"Path to companies file (default: {config.COMPANIES_FILE})",
+    )
+    parser.add_argument(
+        "--backend", type=str, choices=["serper", "playwright", "auto"],
+        help="Override SEARCH_BACKEND env var for this run",
+    )
+    parser.add_argument(
+        "--max-concurrent", type=int, default=None,
+        help=f"Max companies in parallel (default: {config.MAX_CONCURRENT_COMPANIES})",
+    )
+    parser.add_argument(
+        "--output-dir", type=Path, default=None,
+        help=f"Output directory (default: {config.OUTPUT_DIR})",
+    )
+    return parser.parse_args()
+
+
+# ── Main ──────────────────────────────────────────────────────────────────────
+
+async def main():
+    args = parse_args()
+    setup_logging(config.LOG_LEVEL)
+
+    console.rule("[bold blue]🎯 ICP Search Engine[/bold blue]")
+
+    # Override backend if specified via CLI
+    if args.backend:
+        import os
+        os.environ["SEARCH_BACKEND"] = args.backend
+        # Reload config values
+        import importlib
+        import config as cfg
+        importlib.reload(cfg)
+
+    # Validate config
+    try:
+        config.validate()
+    except EnvironmentError as e:
+        console.print(f"[red]❌ Configuration error:[/red]\n{e}")
+        console.print("\n[yellow]Tip:[/yellow] Copy .env.example to .env and fill in your API keys.")
+        sys.exit(1)
+
+    # Determine company list
+    if args.company:
+        companies = [args.company.strip()]
+    elif args.companies:
+        companies = [c.strip() for c in args.companies.split(",") if c.strip()]
+    else:
+        file_path = args.file or config.COMPANIES_FILE
+        companies = load_companies(file_path)
+
+    # Drop duplicates while preserving order
+    companies = deduplicate_companies(companies)
+
+    output_dir = args.output_dir or config.OUTPUT_DIR
+    max_concurrent = args.max_concurrent or config.MAX_CONCURRENT_COMPANIES
+
+    console.print(f"[bold]Companies to process:[/bold] {len(companies)}")
+    console.print(f"[bold]Search backend:[/bold] [cyan]{config.SEARCH_BACKEND}[/cyan]")
+    console.print(f"[bold]Max concurrent:[/bold] {max_concurrent}")
+    console.print(f"[bold]Output dir:[/bold] {output_dir}\n")
+
+    # Run pipeline
+    writer = ResultsWriter(Path(output_dir))
+    results = await run_all(companies, writer, max_concurrent)
+
+    # Print summary table
+    console.print()
+    print_summary(results)
+
+    # Final file paths
+    console.print()
+    console.rule("[bold green]✅ Complete[/bold green]")
+    console.print(f"📄 [bold]Detailed log:[/bold] [cyan]{writer.detail_path}[/cyan]")
+    console.print(f"📊 [bold]Summary:[/bold]      [cyan]{writer.summary_path}[/cyan]")
 
 
 if __name__ == "__main__":
-    args = _build_parser().parse_args()
-    asyncio.run(run_pipeline(leads_path=args.leads, max_concurrent=args.concurrency))
+    asyncio.run(main())
